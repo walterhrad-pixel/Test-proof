@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "LakeProof"
+description = "A premium Lake Victoria seafood traceability app that records catch provenance, custody handovers, and public proof across field, operations, and dashboard workflows."
+version = "1.0.0"
+id = "artifacts/lakeproof"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18323
+
+[services.development]
+run = "pnpm --filter @workspace/lakeproof run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/lakeproof", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/lakeproof/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18323"
+BASE_PATH = "/"
