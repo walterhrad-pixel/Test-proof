@@ -32,6 +32,24 @@ For the detailed context, users, constraints, and scope, see [`docs/PROBLEM_DEFI
 | pnpm | Required package manager; the root preinstall guard rejects other package managers. |
 | PostgreSQL connection string | Needed only for database operations through `lib/db`. |
 
+## Stack
+
+- pnpm workspaces, Node.js 24, TypeScript 5.9
+- API: Express 5
+- DB: PostgreSQL + Drizzle ORM
+- Validation: Zod (`zod/v4`), `drizzle-zod`
+- API codegen: Orval (from OpenAPI spec)
+- Build: esbuild (CJS bundle)
+
+## Where things live
+
+- `artifacts/lakeproof/src/App.tsx` — route-aware frontend experience and local session demo state
+- `artifacts/lakeproof/src/index.css` — shared editorial Lake Victoria theme, typography, grain, and responsive rules
+- `artifacts/lakeproof/public/images/` — approved Lake Victoria and fisher imagery used by the app
+- `artifacts/api-server/` — shared API service scaffold
+- `lib/api-spec/openapi.yaml` — shared API contract source of truth
+- `lib/db/src/schema/` — shared PostgreSQL schema source of truth
+
 ```bash
 # Install the workspace dependencies.
 pnpm install
