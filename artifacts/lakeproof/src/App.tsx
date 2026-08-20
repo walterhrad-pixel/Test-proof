@@ -5,6 +5,7 @@ import { Link, Route, Switch, useLocation, useParams } from 'wouter';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { FisherRegistration } from '@/pages/fisher-registration';
 
 type Stage = 'Catch' | 'Landing' | 'Transport' | 'Processing' | 'Market';
 type CustodyEvent = { sequence: number; stage: Stage; actor: string; timestamp: string; location: string; eventHash: string; predecessorHash: string; notes: string };
@@ -63,9 +64,9 @@ function Shell({ children, dark = false }: { children: ReactNode; dark?: boolean
       </nav>
       <div className="mobile-menu">
         <button className="pill" onClick={() => setMenu(!menu)} aria-label="Toggle menu" data-testid="button-menu">{menu ? <X size={15} /> : <Menu size={15} />}</button>
-        <Link href="/register" className="pill pill-solid" data-testid="link-register-mobile">Register catch</Link>
+        <Link href="/register" className="pill pill-solid" data-testid="link-register-mobile">Register fisher</Link>
       </div>
-      <Link href="/register" className="pill pill-solid nav-register" data-testid="link-register">Register catch <ArrowRight size={14} /></Link>
+      <Link href="/register" className="pill pill-solid nav-register" data-testid="link-register">Register fisher <ArrowRight size={14} /></Link>
     </header>
     {menu && <div className="shell mobile-nav" style={{ paddingTop: 15, paddingBottom: 15, display: 'grid', gap: 14 }}>
       <Link href="/verify" data-testid="mobile-link-verify">Verify a catch</Link><Link href="/operations" data-testid="mobile-link-operations">Operations</Link><Link href="/dashboard" data-testid="mobile-link-dashboard">Overview</Link><Link href="/foundations" data-testid="mobile-link-foundations">Foundations</Link>
@@ -85,7 +86,7 @@ function Home() {
           <div className="eyebrow">A catch passport for Lake Victoria</div>
           <h1>Every catch<br />has a <em>story.</em></h1>
           <p className="hero-copy">LakeProof records the journey from lake to market — giving the people around Lake Victoria a shared, trustworthy account of what was caught, where, and by whom.</p>
-          <div className="hero-actions"><Link href="/register" className="pill pill-solid" data-testid="hero-register">Register a catch <ArrowRight size={14} /></Link><Link href="/verify" className="pill" data-testid="hero-verify">Look up a proof <Search size={14} /></Link></div>
+          <div className="hero-actions"><Link href="/register" className="pill pill-solid" data-testid="hero-register">Register a fisher <ArrowRight size={14} /></Link><Link href="/verify" className="pill" data-testid="hero-verify">Look up a proof <Search size={14} /></Link></div>
           <div className="status-line" style={{ marginTop: 30 }}><span className="status-dot" /> Operating across the lake region <span className="gold">·</span> Offline-ready</div>
         </div>
         <figure className="hero-art"><img src="/images/crew.jpg" alt="Fishers preparing a net beside a wooden boat on Lake Victoria" /><figcaption className="art-caption"><span className="mono">01 / SOURCE</span><br />Dunga Beach, Kisumu · The record begins where the net comes ashore.</figcaption></figure>
@@ -111,7 +112,11 @@ function PageHead({ eyebrow, title, children }: { eyebrow: string; title: string
   return <div className="page-head"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1></div>{children && <div>{children}</div>}</div>;
 }
 
-function Register() {
+function RegisterFisher() {
+  return <FisherRegistration Shell={Shell} PageHead={PageHead} />;
+}
+
+function RegisterCatch() {
   const [submitted, setSubmitted] = useState<Batch | null>(null);
   const [form, setForm] = useState({ species: 'Nile perch', weightKg: '', gear: 'Gillnet · 4 inch', fisherId: '', catchDateTime: '2025-06-18T06:40', landingSite: 'Dunga Beach, Kisumu', coordinates: '' });
   const set = (key: string, value: string) => setForm(current => ({ ...current, [key]: value }));
@@ -188,7 +193,9 @@ function Router() {
   const [location] = useLocation();
   return <ErrorBoundary resetKey={location}><Switch>
     <Route path="/" component={Home} />
-    <Route path="/register" component={Register} />
+    <Route path="/register-fisher" component={RegisterFisher} />
+    <Route path="/register-catch" component={RegisterCatch} />
+    <Route path="/register" component={RegisterFisher} />
     <Route path="/verify" component={Verify} />
     <Route path="/verify/:id" component={() => <Proof />} />
     <Route path="/operations" component={Operations} />
