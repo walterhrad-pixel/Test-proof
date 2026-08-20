@@ -433,9 +433,326 @@ function Proof({ operations = false }: { operations?: boolean }) {
   const batch = demoBatches.find(item => item.publicId.toLowerCase() === (params.id || '').toLowerCase()) || demoBatches[0];
   const [expanded, setExpanded] = useState<number | null>(batch.custodyEvents.length - 1);
   const [advanced, setAdvanced] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [, navigate] = useLocation();
   const currentIndex = stages.indexOf(batch.latestStage);
-  return <Shell><main className="shell page-main"><Link href={operations ? '/operations' : '/verify'} className="status-line" style={{ marginBottom: 27, display: 'inline-flex' }} data-testid="link-back"><ArrowLeft size={14} /> {operations ? 'Back to operations' : 'Back to lookup'}</Link><div className="proof-head"><div><div className="eyebrow">{operations ? 'Operations / Active chain' : 'Public proof / Redacted view'}</div><h1 style={{ fontFamily: 'var(--app-font-serif)', fontSize: 'clamp(40px, 6vw, 68px)', lineHeight: 1, letterSpacing: '-.05em', fontWeight: 500, margin: '10px 0 0' }}>{batch.species} <em>· {batch.publicId}</em></h1></div><div className="verdict"><ShieldCheck size={15} /> Chain integrity verified</div></div><div className="stage-strip">{stages.map((stage, index) => <div key={stage} className={`stage-item ${index <= currentIndex ? 'active' : ''}`}><span>0{index + 1}</span>{stage}</div>)}</div><div className="proof-grid"><section className="surface surface-pad"><div className="section-label"><strong>Custody timeline</strong><span className="eyebrow">{batch.custodyEvents.length} of 5 events</span></div><div className="timeline">{batch.custodyEvents.map(item => <div className="event" key={item.sequence}><div className="event-top"><h3>{item.stage}</h3><span className="mono" style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))' }}>SEQ {String(item.sequence).padStart(2, '0')}</span></div><p>{item.actor} · {item.timestamp}</p><p>{item.location}</p><button onClick={() => setExpanded(expanded === item.sequence ? null : item.sequence)} style={{ padding: '5px 0', border: 0, background: 'none', cursor: 'pointer', color: 'hsl(var(--primary))', fontSize: 11 }} data-testid={`button-event-details-${item.sequence}`}>{expanded === item.sequence ? 'Hide record details' : 'View record details'} <ChevronDown size={12} style={{ verticalAlign: '-2px' }} /></button>{expanded === item.sequence && <div style={{ marginTop: 9, padding: '10px 0', borderTop: '1px solid hsl(var(--border))' }}><p>{item.notes}</p><div className="hash">event {item.eventHash}</div>{item.predecessorHash !== '—' && <div className="hash">prev&nbsp; {item.predecessorHash}</div>}</div>}</div>)}</div></section><aside><div className="surface surface-pad"><div className="eyebrow">Batch summary</div><div className="batch-summary"><div><div className="stat-label">Species</div><div className="stat-value">{batch.species}</div></div><div><div className="stat-label">Weight</div><div className="stat-value">{batch.weightKg} <small style={{ fontFamily: 'var(--app-font-sans)', fontSize: 12 }}>kg</small></div></div><div><div className="stat-label">Gear</div><div className="stat-value" style={{ fontSize: 17 }}>{batch.gear}</div></div><div><div className="stat-label">Caught</div><div className="stat-value" style={{ fontSize: 17 }}>{dateLabel(batch.catchDateTime)}</div></div><div><div className="stat-label">Landing</div><div className="stat-value" style={{ fontSize: 17 }}>{batch.landingSite}</div></div><div><div className="stat-label">Coordinates</div><div className="stat-value mono" style={{ fontSize: 11 }}>{batch.coordinates}</div></div></div><div className="rule" style={{ paddingTop: 17 }}><div className="eyebrow">Chain head</div><div className="hash" style={{ marginTop: 7 }}>{batch.chainHeadHash}</div></div></div><div className="surface surface-pad" style={{ marginTop: 18 }}><div className="eyebrow">Actions</div><div style={{ display: 'grid', gap: 9, marginTop: 15 }}><button className="pill" style={{ justifyContent: 'center' }} onClick={() => window.print()} data-testid="button-export-proof"><Download size={14} /> Export proof</button><button className="pill" style={{ justifyContent: 'center' }} onClick={() => alert(`QR reference: ${batch.publicId}`)} data-testid="button-show-qr"><QrCode size={14} /> Show QR reference</button>{operations && <button className="pill pill-solid" style={{ justifyContent: 'center' }} onClick={() => setAdvanced(true)} data-testid="button-advance-stage"><Plus size={14} /> Add next-stage event</button>}</div>{advanced && <div className="success-box" style={{ marginTop: 15 }}><Check size={15} /><strong style={{ display: 'block', marginTop: 7 }}>Next-stage action queued</strong><p style={{ fontSize: 12 }}>The next handover form is ready for the assigned operator. This demo does not alter the immutable source events.</p><button className="pill" onClick={() => { setAdvanced(false); navigate('/operations'); }} data-testid="button-return-operations">Return to operations</button></div>}</div></aside></div><div className="rule" style={{ marginTop: 30, paddingTop: 18, fontSize: 11, color: 'hsl(var(--muted-foreground))' }}><strong>Evidence boundary.</strong> A valid chain proves the stored record has not changed after server acceptance. It does not prove that the first physical entry was truthful.</div></main></Shell>;
+
+  // Landing Form (from Catch to Landing)
+  const [landingForm, setLandingForm] = useState({ agentName: '', agentId: '', weightConfirmed: batch.weightKg.toString(), weightVariance: '0', condition: 'Good', quality: 'Premium', receivingTime: new Date().toISOString().slice(0, 16), notes: '', inspectionCheckmarks: { weighingScale: false, icePresence: false, temperatureRecord: false, damageAssessment: false } });
+
+  // Transport Form (from Landing to Transport)
+  const [transportForm, setTransportForm] = useState({ transporterName: '', transporterId: '', vehicleType: 'Refrigerated truck', temperatureSet: '4', sealNumber: '', departureTime: new Date().toISOString().slice(0, 16), arrivalLocation: '', estimatedArrival: '', notes: '' });
+
+  // Processing Form (from Transport to Processing)
+  const [processingForm, setProcessingForm] = useState({ processorName: '', processorId: '', processingType: 'Filleting', packingDate: new Date().toISOString().slice(0, 16), storageCondition: 'Frozen', lotNumber: '', finalWeight: batch.weightKg.toString(), notes: '' });
+
+  // Market Form (from Processing to Market)
+  const [marketForm, setMarketForm] = useState({ buyerName: '', buyerId: '', marketLocation: '', salePrice: '', currency: 'KES', saleDate: new Date().toISOString().slice(0, 16), quantity: batch.weightKg.toString(), notes: '' });
+
+  const createHandoverEvent = (agentName: string, agentId: string, nextStage: Stage, location: string, notes: string) => {
+    const nextSequence = batch.custodyEvents.length + 1;
+    const newEvent = event(nextSequence, nextStage, `${agentName} · ${agentId}`, new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }), location, `sha256:${Math.random().toString(36).slice(2)}…${Math.random().toString(36).slice(2, 7)}`, batch.chainHeadHash, notes);
+    batch.custodyEvents.push(newEvent);
+    batch.latestStage = nextStage;
+    batch.chainHeadHash = newEvent.eventHash;
+  };
+
+  const submitLanding = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!landingForm.agentName || !landingForm.agentId) return;
+    const notes = `${landingForm.notes || 'Fish received and documented.'} [Weight confirmed: ${landingForm.weightConfirmed}kg, Condition: ${landingForm.condition}]`;
+    createHandoverEvent(landingForm.agentName, landingForm.agentId, 'Landing', batch.landingSite, notes);
+    setSuccessMessage(`Landing handover recorded by ${landingForm.agentName}`);
+    setSubmitted(true);
+  };
+
+  const submitTransport = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transportForm.transporterName || !transportForm.transporterId) return;
+    const notes = `${transportForm.notes || 'Fish transported.'} [Vehicle: ${transportForm.vehicleType}, Temperature: ${transportForm.temperatureSet}°C, Seal: ${transportForm.sealNumber}]`;
+    createHandoverEvent(transportForm.transporterName, transportForm.transporterId, 'Transport', `${batch.landingSite} → ${transportForm.arrivalLocation}`, notes);
+    setSuccessMessage(`Transport handover recorded by ${transportForm.transporterName}`);
+    setSubmitted(true);
+  };
+
+  const submitProcessing = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!processingForm.processorName || !processingForm.processorId) return;
+    const notes = `${processingForm.notes || 'Fish processed.'} [Type: ${processingForm.processingType}, Lot: ${processingForm.lotNumber}, Storage: ${processingForm.storageCondition}]`;
+    createHandoverEvent(processingForm.processorName, processingForm.processorId, 'Processing', 'Processing facility', notes);
+    setSuccessMessage(`Processing handover recorded by ${processingForm.processorName}`);
+    setSubmitted(true);
+  };
+
+  const submitMarket = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!marketForm.buyerName || !marketForm.buyerId) return;
+    const notes = `${marketForm.notes || 'Fish sold.'} [Market: ${marketForm.marketLocation}, Price: ${marketForm.salePrice} ${marketForm.currency}]`;
+    createHandoverEvent(marketForm.buyerName, marketForm.buyerId, 'Market', marketForm.marketLocation, notes);
+    setSuccessMessage(`Market handover recorded by ${marketForm.buyerName}`);
+    setSubmitted(true);
+  };
+
+  const getFormTitle = () => {
+    if (batch.latestStage === 'Catch') return 'Landing handover form';
+    if (batch.latestStage === 'Landing') return 'Transport handover form';
+    if (batch.latestStage === 'Transport') return 'Processing handover form';
+    if (batch.latestStage === 'Processing') return 'Market handover form';
+    return 'Handover form';
+  };
+
+  const getFormDescription = () => {
+    if (batch.latestStage === 'Catch') return 'Record details as the fish transfer to the landing site. Document the receiving agent, weight confirmation, and condition assessment.';
+    if (batch.latestStage === 'Landing') return 'Document the transport details including vehicle type, temperature control, and departure time.';
+    if (batch.latestStage === 'Transport') return 'Record processing details including type of processing, packing, and storage conditions.';
+    if (batch.latestStage === 'Processing') return 'Document the final sale including buyer details, market location, and price.';
+    return '';
+  };
+
+  const renderForm = () => {
+    if (batch.latestStage === 'Catch') {
+      return <form onSubmit={submitLanding} data-testid="form-landing-handover"><div className="field-grid"><div className="field"><label htmlFor="agent-name">Receiving agent name *</label><input id="agent-name" placeholder="e.g. John Kipchoge" value={landingForm.agentName} onChange={e => setLandingForm(current => ({ ...current, agentName: e.target.value }))} required data-testid="input-agent-name" /></div><div className="field"><label htmlFor="agent-id">Agent ID / License *</label><input id="agent-id" placeholder="e.g. LAN-DUN-023" value={landingForm.agentId} onChange={e => setLandingForm(current => ({ ...current, agentId: e.target.value }))} required data-testid="input-agent-id" /></div><div className="field"><label htmlFor="weight-confirmed">Weight confirmed (kg) *</label><input id="weight-confirmed" type="number" step=".1" value={landingForm.weightConfirmed} onChange={e => setLandingForm(current => ({ ...current, weightConfirmed: e.target.value }))} required data-testid="input-weight-confirmed" /></div><div className="field"><label htmlFor="weight-variance">Weight variance (kg)</label><input id="weight-variance" type="number" step=".1" placeholder="Difference from reported weight" value={landingForm.weightVariance} onChange={e => setLandingForm(current => ({ ...current, weightVariance: e.target.value }))} data-testid="input-weight-variance" /></div><div className="field"><label htmlFor="condition">Fish condition *</label><select id="condition" value={landingForm.condition} onChange={e => setLandingForm(current => ({ ...current, condition: e.target.value }))} required data-testid="select-condition"><option>Good</option><option>Fair</option><option>Poor</option></select></div><div className="field"><label htmlFor="quality">Quality grade *</label><select id="quality" value={landingForm.quality} onChange={e => setLandingForm(current => ({ ...current, quality: e.target.value }))} required data-testid="select-quality"><option>Premium</option><option>Grade A</option><option>Grade B</option><option>Grade C</option></select></div><div className="field"><label htmlFor="receive-time">Receiving time *</label><input id="receive-time" type="datetime-local" value={landingForm.receivingTime} onChange={e => setLandingForm(current => ({ ...current, receivingTime: e.target.value }))} required data-testid="input-receive-time" /></div><div className="field full"><label htmlFor="notes">Inspection notes</label><textarea id="notes" placeholder="Record any observations about the catch condition, damage, or special handling requirements." value={landingForm.notes} onChange={e => setLandingForm(current => ({ ...current, notes: e.target.value }))} rows={3} style={{ fontFamily: 'var(--app-font-sans)', fontSize: 13 }} data-testid="input-notes" /></div></div><div className="section-label" style={{ marginTop: 20 }}><strong>Receiving checklist</strong></div><div style={{ display: 'grid', gap: 10 }}><label style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}><input type="checkbox" checked={landingForm.inspectionCheckmarks.weighingScale} onChange={e => setLandingForm(current => ({ ...current, inspectionCheckmarks: { ...current.inspectionCheckmarks, weighingScale: e.target.checked } }))} data-testid="check-weighing-scale" /><span>Weighing scale used and verified</span></label><label style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}><input type="checkbox" checked={landingForm.inspectionCheckmarks.icePresence} onChange={e => setLandingForm(current => ({ ...current, inspectionCheckmarks: { ...current.inspectionCheckmarks, icePresence: e.target.checked } }))} data-testid="check-ice-presence" /><span>Ice/cold chain properly maintained</span></label><label style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}><input type="checkbox" checked={landingForm.inspectionCheckmarks.temperatureRecord} onChange={e => setLandingForm(current => ({ ...current, inspectionCheckmarks: { ...current.inspectionCheckmarks, temperatureRecord: e.target.checked } }))} data-testid="check-temp-record" /><span>Temperature record documented</span></label><label style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}><input type="checkbox" checked={landingForm.inspectionCheckmarks.damageAssessment} onChange={e => setLandingForm(current => ({ ...current, inspectionCheckmarks: { ...current.inspectionCheckmarks, damageAssessment: e.target.checked } }))} data-testid="check-damage" /><span>Damage assessment completed</span></label></div><div style={{ marginTop: 25, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 15, flexWrap: 'wrap' }}><div className="status-line"><span className="status-dot" /> Record will be immutable after acceptance</div><div style={{ display: 'flex', gap: 10 }}><button className="pill" type="button" onClick={() => setAdvanced(false)} data-testid="button-cancel-landing">Cancel</button><button className="pill pill-solid" type="submit" data-testid="button-submit-landing">Record handover <ArrowRight size={14} /></button></div></div></form>;
+    }
+    if (batch.latestStage === 'Landing') {
+      return <form onSubmit={submitTransport} data-testid="form-transport-handover"><div className="field-grid"><div className="field"><label htmlFor="transporter-name">Transporter name *</label><input id="transporter-name" placeholder="e.g. James Kipchoge" value={transportForm.transporterName} onChange={e => setTransportForm(current => ({ ...current, transporterName: e.target.value }))} required data-testid="input-transporter-name" /></div><div className="field"><label htmlFor="transporter-id">Transporter ID / License *</label><input id="transporter-id" placeholder="e.g. TRN-KSM-001" value={transportForm.transporterId} onChange={e => setTransportForm(current => ({ ...current, transporterId: e.target.value }))} required data-testid="input-transporter-id" /></div><div className="field"><label htmlFor="vehicle-type">Vehicle type *</label><select id="vehicle-type" value={transportForm.vehicleType} onChange={e => setTransportForm(current => ({ ...current, vehicleType: e.target.value }))} required data-testid="select-vehicle-type"><option>Refrigerated truck</option><option>Ice box truck</option><option>Standard truck</option><option>Motorcycle</option><option>Bicycle</option></select></div><div className="field"><label htmlFor="temperature">Temperature setting (°C) *</label><input id="temperature" type="number" step=".1" value={transportForm.temperatureSet} onChange={e => setTransportForm(current => ({ ...current, temperatureSet: e.target.value }))} required data-testid="input-temperature" /></div><div className="field"><label htmlFor="seal-number">Seal/Lock number</label><input id="seal-number" placeholder="e.g. SEAL-2025-001" value={transportForm.sealNumber} onChange={e => setTransportForm(current => ({ ...current, sealNumber: e.target.value }))} data-testid="input-seal-number" /></div><div className="field"><label htmlFor="departure-time">Departure time *</label><input id="departure-time" type="datetime-local" value={transportForm.departureTime} onChange={e => setTransportForm(current => ({ ...current, departureTime: e.target.value }))} required data-testid="input-departure-time" /></div><div className="field"><label htmlFor="arrival-location">Arrival location</label><input id="arrival-location" placeholder="e.g. Kisumu Central Market" value={transportForm.arrivalLocation} onChange={e => setTransportForm(current => ({ ...current, arrivalLocation: e.target.value }))} data-testid="input-arrival-location" /></div><div className="field"><label htmlFor="estimated-arrival">Estimated arrival time</label><input id="estimated-arrival" type="datetime-local" value={transportForm.estimatedArrival} onChange={e => setTransportForm(current => ({ ...current, estimatedArrival: e.target.value }))} data-testid="input-estimated-arrival" /></div><div className="field full"><label htmlFor="notes">Transport notes</label><textarea id="notes" placeholder="Record any observations about transport conditions, delays, or incidents." value={transportForm.notes} onChange={e => setTransportForm(current => ({ ...current, notes: e.target.value }))} rows={3} style={{ fontFamily: 'var(--app-font-sans)', fontSize: 13 }} data-testid="input-transport-notes" /></div></div><div style={{ marginTop: 25, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 15, flexWrap: 'wrap' }}><div className="status-line"><span className="status-dot" /> Temperature and seals logged</div><div style={{ display: 'flex', gap: 10 }}><button className="pill" type="button" onClick={() => setAdvanced(false)} data-testid="button-cancel-transport">Cancel</button><button className="pill pill-solid" type="submit" data-testid="button-submit-transport">Record handover <ArrowRight size={14} /></button></div></div></form>;
+    }
+    if (batch.latestStage === 'Transport') {
+      return <form onSubmit={submitProcessing} data-testid="form-processing-handover"><div className="field-grid"><div className="field"><label htmlFor="processor-name">Processor name *</label><input id="processor-name" placeholder="e.g. Grace Kipchoge" value={processingForm.processorName} onChange={e => setProcessingForm(current => ({ ...current, processorName: e.target.value }))} required data-testid="input-processor-name" /></div><div className="field"><label htmlFor="processor-id">Processor ID / License *</label><input id="processor-id" placeholder="e.g. PRO-KSM-015" value={processingForm.processorId} onChange={e => setProcessingForm(current => ({ ...current, processorId: e.target.value }))} required data-testid="input-processor-id" /></div><div className="field"><label htmlFor="processing-type">Processing type *</label><select id="processing-type" value={processingForm.processingType} onChange={e => setProcessingForm(current => ({ ...current, processingType: e.target.value }))} required data-testid="select-processing-type"><option>Filleting</option><option>Smoking</option><option>Freezing</option><option>Canning</option><option>Drying</option></select></div><div className="field"><label htmlFor="packing-date">Packing date *</label><input id="packing-date" type="datetime-local" value={processingForm.packingDate} onChange={e => setProcessingForm(current => ({ ...current, packingDate: e.target.value }))} required data-testid="input-packing-date" /></div><div className="field"><label htmlFor="storage-condition">Storage condition *</label><select id="storage-condition" value={processingForm.storageCondition} onChange={e => setProcessingForm(current => ({ ...current, storageCondition: e.target.value }))} required data-testid="select-storage-condition"><option>Frozen</option><option>Refrigerated</option><option>Dried</option><option>Smoked</option><option>Canned</option></select></div><div className="field"><label htmlFor="lot-number">Lot/Batch number</label><input id="lot-number" placeholder="e.g. LOT-2025-A1" value={processingForm.lotNumber} onChange={e => setProcessingForm(current => ({ ...current, lotNumber: e.target.value }))} data-testid="input-lot-number" /></div><div className="field"><label htmlFor="final-weight">Final weight (kg)</label><input id="final-weight" type="number" step=".1" value={processingForm.finalWeight} onChange={e => setProcessingForm(current => ({ ...current, finalWeight: e.target.value }))} data-testid="input-final-weight" /></div><div className="field full"><label htmlFor="notes">Processing notes</label><textarea id="notes" placeholder="Record processing methods, yield loss, quality observations." value={processingForm.notes} onChange={e => setProcessingForm(current => ({ ...current, notes: e.target.value }))} rows={3} style={{ fontFamily: 'var(--app-font-sans)', fontSize: 13 }} data-testid="input-processing-notes" /></div></div><div style={{ marginTop: 25, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 15, flexWrap: 'wrap' }}><div className="status-line"><span className="status-dot" /> Lot number and storage documented</div><div style={{ display: 'flex', gap: 10 }}><button className="pill" type="button" onClick={() => setAdvanced(false)} data-testid="button-cancel-processing">Cancel</button><button className="pill pill-solid" type="submit" data-testid="button-submit-processing">Record handover <ArrowRight size={14} /></button></div></div></form>;
+    }
+    if (batch.latestStage === 'Processing') {
+      return <form onSubmit={submitMarket} data-testid="form-market-handover"><div className="field-grid"><div className="field"><label htmlFor="buyer-name">Buyer name *</label><input id="buyer-name" placeholder="e.g. Samuel Kipchoge" value={marketForm.buyerName} onChange={e => setMarketForm(current => ({ ...current, buyerName: e.target.value }))} required data-testid="input-buyer-name" /></div><div className="field"><label htmlFor="buyer-id">Buyer ID / License *</label><input id="buyer-id" placeholder="e.g. BUY-KSM-042" value={marketForm.buyerId} onChange={e => setMarketForm(current => ({ ...current, buyerId: e.target.value }))} required data-testid="input-buyer-id" /></div><div className="field"><label htmlFor="market-location">Market location *</label><input id="market-location" placeholder="e.g. Kisumu Central Market" value={marketForm.marketLocation} onChange={e => setMarketForm(current => ({ ...current, marketLocation: e.target.value }))} required data-testid="input-market-location" /></div><div className="field"><label htmlFor="sale-price">Sale price *</label><input id="sale-price" type="number" step=".01" placeholder="e.g. 450" value={marketForm.salePrice} onChange={e => setMarketForm(current => ({ ...current, salePrice: e.target.value }))} required data-testid="input-sale-price" /></div><div className="field"><label htmlFor="currency">Currency *</label><select id="currency" value={marketForm.currency} onChange={e => setMarketForm(current => ({ ...current, currency: e.target.value }))} required data-testid="select-currency"><option>KES</option><option>USD</option><option>EUR</option></select></div><div className="field"><label htmlFor="sale-date">Sale date *</label><input id="sale-date" type="datetime-local" value={marketForm.saleDate} onChange={e => setMarketForm(current => ({ ...current, saleDate: e.target.value }))} required data-testid="input-sale-date" /></div><div className="field"><label htmlFor="quantity">Quantity (kg)</label><input id="quantity" type="number" step=".1" value={marketForm.quantity} onChange={e => setMarketForm(current => ({ ...current, quantity: e.target.value }))} data-testid="input-quantity" /></div><div className="field full"><label htmlFor="notes">Sale notes</label><textarea id="notes" placeholder="Record buyer feedback, market conditions, any issues." value={marketForm.notes} onChange={e => setMarketForm(current => ({ ...current, notes: e.target.value }))} rows={3} style={{ fontFamily: 'var(--app-font-sans)', fontSize: 13 }} data-testid="input-market-notes" /></div></div><div style={{ marginTop: 25, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 15, flexWrap: 'wrap' }}><div className="status-line"><span className="status-dot" /> Final sale documented</div><div style={{ display: 'flex', gap: 10 }}><button className="pill" type="button" onClick={() => setAdvanced(false)} data-testid="button-cancel-market">Cancel</button><button className="pill pill-solid" type="submit" data-testid="button-submit-market">Record handover <ArrowRight size={14} /></button></div></div></form>;
+    }
+    return null;
+  };
+
+  if (advanced && submitted) {
+    return (
+      <Shell>
+        <main className="shell page-main">
+          <div className="lookup-shell" style={{ paddingTop: 30 }}>
+            <div className="success-box">
+              <Check size={24} color="hsl(145 28% 38%)" />
+              <h2>{successMessage}</h2>
+              <p>The chain continues to the next stage.</p>
+              <div className="surface" style={{ padding: 18, textAlign: 'left', margin: '24px 0' }}>
+                <div className="eyebrow">Current stage</div>
+                <div className="serif" style={{ fontSize: 24, marginTop: 8, textTransform: 'capitalize' }}>
+                  {batch.latestStage}
+                </div>
+                <div className="status-line" style={{ marginTop: 12 }}>
+                  <span className="status-dot gold-dot" /> Handover recorded and verified
+                </div>
+              </div>
+              <div className="hero-actions" style={{ justifyContent: 'center' }}>
+                <button
+                  className="pill pill-solid"
+                  onClick={() => window.location.reload()}
+                  data-testid="button-view-updated-chain"
+                >
+                  View updated chain <ArrowRight size={14} />
+                </button>
+                <button className="pill" onClick={() => navigate('/operations')} data-testid="button-return-to-ops">
+                  Return to operations
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </Shell>
+    );
+  }
+
+  return (
+    <Shell>
+      <main className="shell page-main">
+        <Link
+          href={operations ? '/operations' : '/verify'}
+          className="status-line"
+          style={{ marginBottom: 27, display: 'inline-flex' }}
+          data-testid="link-back"
+        >
+          <ArrowLeft size={14} /> {operations ? 'Back to operations' : 'Back to lookup'}
+        </Link>
+        <div className="proof-head">
+          <div>
+            <div className="eyebrow">
+              {operations ? 'Operations / Active chain' : 'Public proof / Redacted view'}
+            </div>
+            <h1
+              style={{
+                fontFamily: 'var(--app-font-serif)',
+                fontSize: 'clamp(40px, 6vw, 68px)',
+                lineHeight: 1,
+                letterSpacing: '-.05em',
+                fontWeight: 500,
+                margin: '10px 0 0'
+              }}
+            >
+              {batch.species} <em>· {batch.publicId}</em>
+            </h1>
+          </div>
+          <div className="verdict">
+            <ShieldCheck size={15} /> Chain integrity verified
+          </div>
+        </div>
+        <div className="stage-strip">
+          {stages.map((stage, index) => (
+            <div key={stage} className={`stage-item ${index <= currentIndex ? 'active' : ''}`}>
+              <span>0{index + 1}</span>
+              {stage}
+            </div>
+          ))}
+        </div>
+        <div className="proof-grid">
+          <section className="surface surface-pad">
+            <div className="section-label">
+              <strong>Custody timeline</strong>
+              <span className="eyebrow">{batch.custodyEvents.length} of 5 events</span>
+            </div>
+            <div className="timeline">
+              {batch.custodyEvents.map(item => (
+                <div className="event" key={item.sequence}>
+                  <div className="event-top">
+                    <h3>{item.stage}</h3>
+                    <span className="mono" style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))' }}>
+                      SEQ {String(item.sequence).padStart(2, '0')}
+                    </span>
+                  </div>
+                  <p>
+                    {item.actor} · {item.timestamp}
+                  </p>
+                  <p>{item.location}</p>
+                  <button
+                    onClick={() => setExpanded(expanded === item.sequence ? null : item.sequence)}
+                    style={{
+                      padding: '5px 0',
+                      border: 0,
+                      background: 'none',
+                      cursor: 'pointer',
+                      color: 'hsl(var(--primary))',
+                      fontSize: 11
+                    }}
+                    data-testid={`button-event-details-${item.sequence}`}
+                  >
+                    {expanded === item.sequence ? 'Hide record details' : 'View record details'}{' '}
+                    <ChevronDown size={12} style={{ verticalAlign: '-2px' }} />
+                  </button>
+                  {expanded === item.sequence && (
+                    <div style={{ marginTop: 9, padding: '10px 0', borderTop: '1px solid hsl(var(--border))' }}>
+                      <p>{item.notes}</p>
+                      <div className="hash">event {item.eventHash}</div>
+                      {item.predecessorHash !== '—' && <div className="hash">prev&nbsp; {item.predecessorHash}</div>}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+          <aside>
+            <div className="surface surface-pad">
+              <div className="eyebrow">Batch summary</div>
+              <div className="batch-summary">
+                <div>
+                  <div className="stat-label">Species</div>
+                  <div className="stat-value">{batch.species}</div>
+                </div>
+                <div>
+                  <div className="stat-label">Weight</div>
+                  <div className="stat-value">
+                    {batch.weightKg}{' '}
+                    <small style={{ fontFamily: 'var(--app-font-sans)', fontSize: 12 }}>kg</small>
+                  </div>
+                </div>
+                <div>
+                  <div className="stat-label">Gear</div>
+                  <div className="stat-value" style={{ fontSize: 17 }}>
+                    {batch.gear}
+                  </div>
+                </div>
+                <div>
+                  <div className="stat-label">Caught</div>
+                  <div className="stat-value" style={{ fontSize: 17 }}>
+                    {dateLabel(batch.catchDateTime)}
+                  </div>
+                </div>
+                <div>
+                  <div className="stat-label">Landing</div>
+                  <div className="stat-value" style={{ fontSize: 17 }}>
+                    {batch.landingSite}
+                  </div>
+                </div>
+                <div>
+                  <div className="stat-label">Coordinates</div>
+                  <div className="stat-value mono" style={{ fontSize: 11 }}>
+                    {batch.coordinates}
+                  </div>
+                </div>
+              </div>
+              <div className="rule" style={{ paddingTop: 17 }}>
+                <div className="eyebrow">Chain head</div>
+                <div className="hash" style={{ marginTop: 7 }}>
+                  {batch.chainHeadHash}
+                </div>
+              </div>
+            </div>
+            <div className="surface surface-pad" style={{ marginTop: 18 }}>
+              <div className="eyebrow">Actions</div>
+              <div style={{ display: 'grid', gap: 9, marginTop: 15 }}>
+                <button
+                  className="pill"
+                  style={{ justifyContent: 'center' }}
+                  onClick={() => window.print()}
+                  data-testid="button-export-proof"
+                >
+                  <Download size={14} /> Export proof
+                </button>
+                <button
+                  className="pill"
+                  style={{ justifyContent: 'center' }}
+                  onClick={() => alert(`QR reference: ${batch.publicId}`)}
+                  data-testid="button-show-qr"
+                >
+                  <QrCode size={14} /> Show QR reference
+                </button>
+                {operations && (
+                  <button
+                    className="pill pill-solid"
+                    style={{ justifyContent: 'center' }}
+                    onClick={() => setAdvanced(true)}
+                    data-testid="button-advance-stage"
+                  >
+                    <Plus size={14} /> Add next-stage event
+                  </button>
+                )}
+              </div>
+              {advanced && !submitted && (
+                <div className="surface surface-pad" style={{ marginTop: 20 }}>
+                  <div className="section-label">
+                    <strong>{getFormTitle()}</strong>
+                    <span className="eyebrow">{batch.latestStage} handover</span>
+                  </div>
+                  {getFormDescription() && (
+                    <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginBottom: 15 }}>
+                      {getFormDescription()}
+                    </div>
+                  )}
+                  {renderForm()}
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+        <div
+          className="rule"
+          style={{ marginTop: 30, paddingTop: 18, fontSize: 11, color: 'hsl(var(--muted-foreground))' }}
+        >
+          <strong>Evidence boundary.</strong> A valid chain proves the stored record has not changed after server
+          acceptance. It does not prove that the first physical entry was truthful.
+        </div>
+      </main>
+    </Shell>
+  );
 }
 
 function Operations() {
